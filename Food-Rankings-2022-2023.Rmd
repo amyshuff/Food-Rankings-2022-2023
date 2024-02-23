@@ -34,12 +34,11 @@ Participation percents were found by combining all breakfast and lunch meals ser
 
 Credit for serving supper or after school snacks was given to a district if they had at least one participating location. Supper data was from the Child and Adult Care Food Program (CACFP), and after school snacks were from any Texas Department of Agriculture (TDA) program.
 
-Meal count data was supplied by the TDA. District enrollment numbers came from the Texas Education Agency (TEA).
+Meal count data and free and reduced qualifying student data was supplied by the TDA. Economically disadvantaged student counts obtained from the Texas Education Agency (TEA).
 
 \
 
 ``` {r, results='hide'}
-# March 2024 Update
 
 library(knitr)
 library(usethis)
@@ -56,35 +55,30 @@ library(readxl)
 
 ## Texas Education Agency (TEA)
 
-* Total Enrollment Counts in Student Program and Special Populations Reports, PEIMS Data 2021-2022
+* Total Enrollment Counts in Student Program and Special Populations Reports, [PEIMS Data 2022-2023, Statewide District Totals] (https://rptsvr1.tea.texas.gov/adhocrpt/adspr.html)
 
-TEA data was obtained via Public Records Request. From this data we use the student enrollment counts and economically disadvantaged counts.
+TEA data was obtained from their website. From this data we use the student enrollment counts and economically disadvantaged counts to find the percent economically disadvantaged for each district.
 
-Student enrollment for small campuses are masked. In the case of the reported number being <10, we use 10.
-This means our district student counts are a slight overestimate.
+Student enrollment for small districts are masked. In the case of the reported number being <10, we use 10. This means our district student counts for very small districts will be a slight overestimate.
 
 Economically disadvantaged counts are sometimes unavailable, so in that case they are assumed zero.
 
-Percent economically disadvantaged for each district is calculated from the campus student counts.
-
 ``` {r, results='hide'}
 
-#This is something we request for the school rankings.
-
-tea <- read_xlsx("pru_7128_StudPgmStateCampus22state.xlsx", skip = 6)
+tea <- read.csv("StudPgmStateDistrict23state.csv", skip = 6)
   
  #Small enrollment numbers are masked with numbers like <10, so here we'll remove all the "<" characters.
- #Enrollment for small campuses will be an over estimate.
-tea$ENROLLMENT = gsub("<", "", tea$"ALL ENROLLMENT")
+ #Enrollment for small districts will be an over estimate.
+tea$ENROLLMENT = gsub("<", "", tea$ALL.ENROLLMENT)
 
 tea <- tea %>% 
   mutate(ENROLLMENT = as.numeric(ENROLLMENT),
          #Economically disadvantaged numbers are masked with "-999"
-         eco.dis = ifelse(tea$"ECONOMICALLY DISADVANTAGED" >= 0, tea$"ECONOMICALLY DISADVANTAGED", NA)) %>%
-  rename(District.Number = "DISTRICT NUMBER") %>% 
-  group_by(District.Number) %>% 
+         eco.dis = ifelse(tea$ECONOMICALLY.DISADVANTAGED >= 0, tea$ECONOMICALLY.DISADVANTAGED, NA)) %>%
+  group_by(DISTRICT.NUMBER) %>% 
+  rename(District.Number = DISTRICT.NUMBER) %>% 
   summarise(tea.all.stud = sum(ENROLLMENT),
-            tea.eco.dis = sum(eco.dis, na.rm = T)) %>% 
+            tea.eco.dis = sum(ECONOMICALLY.DISADVANTAGED, na.rm = T)) %>% 
   mutate(eco.dis.pct = (tea.eco.dis/tea.all.stud)*100)
   
 ```
@@ -93,54 +87,58 @@ tea <- tea %>%
 
 ## Texas Department of Agriculture (TDA)
 
+* TDA data was obtained from the [Texas Open Data Portal](https://squaremeals.org/FandN-Resources/Open-Data-Portal)
 
-### School Nutrition Program (SNP)
+### School Nutrition Programs (NSLP/SNP)
 
-* Although we obtained our data from a public information request, it is also available on the [Food and Nutrition Meals Served Dashboard, 2021-2022](https://data.texas.gov/stories/s/2021-2022-TDA-Food-and-Nutrition-Meals-Served-Dash/93tt-ffn6)
+* [SNP Data](https://data.texas.gov/stories/s/e2dm-5r4v) includes meal counts from the National School Lunch Program (NSLP), the School Breakfast Program (SBP), and Afterschool Care Program (ASCP).
 
-SNP Data includes meal counts from the National School Lunch Program (NSLP) and the School Breakfast Program (SBP).
+- [SNP Contacts and Participation Datasets, 2022-2023](https://data.texas.gov/dataset/School-Nutrition-Programs-Contact-Information-and-/h87y-vai4/about_data) has Yes/No participation information for SBP, NSLP, ASPC, Severe Need Breakfast, Universal Free Breakfast, Area Eligible Snack, Community Eligible Provision (CEP), and Provision 2.
 
 Credit for participating in the Community Eligible Provision (CEP) was given to the entire district if they had any participating location.
 
-
 ``` {r, results='hide'}
 
-# This year TDA School Nutrition Program Data is from our public records request.
-# It comes in an excel sheet with multiple tabs. We'll import each of the tabs, select the variables we want to keep, then join them together.
-# This will probably look different next year. First check the Texas Open Data Portal for data before submitting records request.
-# Notes from last year say that only the universal breakfast waiver information wasn't available without PIR
 # Use this link to look for next year's data: https://data.texas.gov/stories/s/e2dm-5r4v
 # Or see the Data Overview Pages in this link: https://squaremeals.org/FandN-Resources/Open-Data-Portal
 
 # Contacts and Participation has CEP data
-snp.contacts <- read_xlsx(here("WF Attachment 180587 PIR 23-194_PY22 SNP Meal Detail_01312023.xlsx"), sheet = 2) %>%
+snp.contacts <- read.csv(here("School_Nutrition_Programs_-_Contact_Information_and_Site-Level_Program_Participation_-_Program_Year_2022-2023_20240223.csv")) %>%
   mutate(CEID = as.numeric(CEID),
          SiteID = as.numeric(SiteID),
          ESC.Region = as.numeric(ESC)) %>%
   group_by(CEID, SiteID) %>%
   rename(County = CECounty,
         District = CountyDistrictCode) %>% 
-  select(CEID, SiteID, CEName, District, ESC.Region,
-         SchoolBreakfastProgram, NationalSchoolLunchProgram, AfterschoolCareProgram,
-         SevereNeedBreakfast, UniversalFreeBreakfast, AreaEligibleSnack, CEP, Provision2)
+  # District numbers here look a little strange (1373 1373 ST ROSE OF LIMA SCHOOL 075-)
+  select(CEID, SiteID, CEName, District, ESC.Region, SchoolBreakfastProgram, NationalSchoolLunchProgram, AfterschoolCareProgram, SevereNeedBreakfast, UniversalFreeBreakfast, AreaEligibleSnack, CEP, Provision2)
+
+# Public Information Request file
+# Here if we need it, but I think everything we need is available from the Open Data Portal
+tda.pir <- read_xlsx("2142024_102315AM_TDA PIR 24-175_20240213.xlsx")
+
+```
+
+- [SNP Meals Served & Reimbused, 2022-2023](https://data.texas.gov/dataset/School-Nutrition-Programs-Meal-Reimbursement-Infor/t9bs-zxkh/about_data) has the number of students enrolled and eligible for free and reduced meals as well as the number of meals served.
+
+The data is available by month. TDA considers October to be the typical snapshot for the year, so we will use October meal counts.
+
+```{r, results='hide'}
 
 #Meal Reimbursement Claims has the number of meals served
-#This data includes meals in June and July. I'm assuming those were school years that started early or ended late. 
-#this tab has claims each month for each site
-#the work here represents what was done in excel last year
-snp.meal.reimb <- read_xlsx(here("WF Attachment 180587 PIR 23-194_PY22 SNP Meal Detail_01312023.xlsx"), sheet = 3) %>%
+#This data includes meals in June and July. I'm assuming those were for summer school students. Or maybe summer meal programs? 
+
+snp.meal.reimb <- read.csv(here("School_Nutrition_Programs_-_Meal_Reimbursement_Information_-_Program_Year_2022-2023_20240223.csv")) %>%
   mutate(CEID = as.numeric(CEID),
          SiteID = as.numeric(SiteID),
          ESC.Region = as.numeric(ESC),
          ClaimDate = as.character(ClaimDate),
          
-         #tda notes say that they consider october the typical snapshot for the year
-         #this is what they did last year
-         # EnrollmentQty = ifelse(ClaimDate == "2021-10-01", EnrollmentQty, 0),
-         # FreeEligQty = ifelse(ClaimDate == "2021-10-01", FreeEligQty, 0),
-         # RedcEligQty = ifelse(ClaimDate == "2021-10-01", RedcEligQty, 0),
-         # PaidEligQty = ifelse(ClaimDate == "2021-10-01", PaidEligQty, 0)
-         #only 455 sites submitted claims for October, though
+         #tda notes say that they consider October the typical snapshot for the year
+          EnrollmentQty = ifelse(ClaimDate == "10/01/2022", EnrollmentQty, 0),
+          FreeEligQty = ifelse(ClaimDate == "10/01/2022", FreeEligQty, 0),
+          RedcEligQty = ifelse(ClaimDate == "10/01/2022", RedcEligQty, 0),
+          PaidEligQty = ifelse(ClaimDate == "10/01/2022", PaidEligQty, 0)
          
          ) %>% 
   group_by(CEID, SiteID) %>%
@@ -151,100 +149,43 @@ snp.meal.reimb <- read_xlsx(here("WF Attachment 180587 PIR 23-194_PY22 SNP Meal 
         TypeOfOrg = first(TypeOfOrg),
         ESC.Region = first(ESC.Region),
         
-        # this sum would find the october number, if we were using that method
-        # Enrollment_TDA = sum(EnrollmentQty, na.rm = T),
-        # Eligible.Free = sum(FreeEligQty, na.rm = T),
-        # Eligible.Reduced = sum(RedcEligQty, na.rm = T),
+        # this sum finds the October number
+        Enrollment_TDA = sum(EnrollmentQty, na.rm = T),
+        Eligible.Free = sum(FreeEligQty, na.rm = T),
+        Eligible.Reduced = sum(RedcEligQty, na.rm = T),
         
         # sums here represent site total for year
-        
         SBP.Days.Served = sum(BreakfastDays, na.rm = T),  
         NSLP.Days.Served = sum(LunchDays, na.rm = T),
         NSLP.Snack.Days.Served = sum(SnackDays, na.rm=T),
-        # SBP.Free = sum(BreakfastServedFree, na.rm=T),    
-        # SBP.Reduced = sum(BreakfastServedRedc, na.rm=T),   
-        # NSLP.Free = sum(LunchServedFree, na.rm=T),
-        # NSLP.Reduced = sum(LunchServedRedc, na.rm=T),
+        SBP.Free = sum(BreakfastServedFree, na.rm=T),    
+        SBP.Reduced = sum(BreakfastServedRedc, na.rm=T),   
+        NSLP.Free = sum(LunchServedFree, na.rm=T),
+        NSLP.Reduced = sum(LunchServedRedc, na.rm=T),
         
         
-        #Because for this particular year everyone could get free meals, I'm assuming those eligible for paid meals still didn't pay.
-        #so I'm going to look at all meals, regardless of eligibility
-        NSLP.Total = sum(LunchTotal),
-        SBP.Total = sum(BreakfastTotal)
+        #Last year everyone could get free meals, so I previously looked at all meals, regardless of eligibility
+        #NSLP.Total = sum(LunchTotal),
+        #SBP.Total = sum(BreakfastTotal)
         )
 
 snp <- full_join(snp.contacts, snp.meal.reimb, by = c("CEID", "SiteID", "CEName", "District", "ESC.Region"))
 
-
-#I don't think we use the cacfp contacts tab for anything
-#cacfp.contacts <- read_xlsx(here("WF Attachment 180587 PIR 23-194_PY22 SNP Meal Detail_01312023.xlsx"), sheet = 4)
-
-
-#Not sure if we need this. These schools didn't serve universal breakfast even though they received money for free lunches.
-#District granted waiver from Senate Bill 376: Lists of CEs and sites approved to waive the Universal Breakfast requirement for PY22.
-#Before importing this data to R, manually check and add CEID and Site ID if not already in sheet
-#ub.waiver <- read_xlsx(here("WF Attachment 180587 PIR 23-194_PY22 SNP Meal Detail_01312023.xlsx"), sheet = 5) %>%
-#  rename(SiteID = "SITE ID", CEName = "CENAME") %>%
-#  mutate(CEID = as.numeric(CEID),
-#         SiteID = as.numeric(SiteID),
-#         UniversalBreakfastWaiver = "Y") %>% 
-#  select(CEID, SiteID, CEName, UniversalBreakfastWaiver)
-#snp.full <- full_join(snp, ub.waiver, by = c("CEID", "SiteID", "CEName"))
 ```
 
-
-
-
-### Seamless Summer Option (SSO)
-
-SSO data was obtained from the TDA F&N Meals Served Dashboard.
-
-* [2021-2022 Monthly SNP & SSO School Meal Count](https://data.texas.gov/dataset/2021-2022-Monthly-School-Meal-Count/dyrd-amq2)
-
-Note from the data dashboard:
-"In March 2020, USDA began allowing flexibility in nutrition assistance program policies to support continued meal access during the coronavirus pandemic (COVID-19). This included offering School Nutrition Program sponsors the option to provide meals through Seamless Summer Option (SSO) in program year 2021-2022." 
-
-The SSO is what schools used to offer free meals to all students regardless of income. Because of this, we are choosing to look at total number of meals served instead of only the free and reduced as we've done in years past. This option will not be available next year because the program has ended. 
-
-
-``` {r, results='hide'}
-
-#This waiver has ended, so disregard this part next year.
-
-sso <- read.csv("2021-2022_School_Meal_Count_-_TDA_F_N_Dashboard.csv") %>% 
-  #Sept claims were incorrectly listed AS 2020-2021, so I'm fixing that issue here.
-  mutate(ProgramYear = "2021-2022") %>% 
-  filter(ProgramYear == "2021-2022",
-         Program == "SEAMLESS_SUMMER_OPTION_MEALS") %>% 
-  group_by(CEID, SiteID) %>%
-  summarise(
-        CEName = first(CEName),
-        County = first(CECounty),
-        District = first(CountyDistrictCode),
-        TypeOfOrg = first(TypeOfOrg),
-        ESC.Region = first(ESC),
-        
-        #sums here represent site total for year
-        SSO.Breakfast = sum(BreakfastTotal, na.rm = T),  
-        SSO.Lunch = sum(LunchTotal, na.rm = T),
-        SSO.Breakfast.Days = sum(BreakfastDays, na.rm = T),  
-        SSO.Lunch.Days = sum(LunchDays, na.rm = T),
-        SSO.Snack.Days = sum(AMSnackDays + PMSnackDays, na.rm=T),
-        )
-```
 
 ### Child and Adult Care Food Program (CACFP)
 
-* [Child and Adult Care Food Programs (CACFP) – At Risk– Meal Reimbursement – Program Year 2021-2022](https://data.texas.gov/dataset/Child-and-Adult-Care-Food-Programs-CACFP-At-Risk-M/e4wr-4i5j)
+* [Child and Adult Care Food Programs (CACFP) –Child Centers – Meal Reimbursement – Program Year 2022 - 2023](https://data.texas.gov/dataset/Child-and-Adult-Care-Food-Programs-CACFP-Child-Cen/nxc9-4zzd/about_data)
 
-CACFP data captures meals (supper) served in At-Risk afterschool care centers.
+CACFP data captures meals (supper and snacks) served in At-Risk after school care centers.
 
 ``` {r, results='hide'}
 #Next year, use this link: https://data.texas.gov/stories/s/iekx-7mdi
-#and scroll down to CACFP At-Risk Child Care Claims
+#and scroll down to CACFP At-Risk Child Care Claims: https://data.texas.gov/stories/s/iekx-7mdi#cacfp-center-data-summary
 
 
-cacfp <- read.csv(here("Child_and_Adult_Care_Food_Programs__CACFP____At_Risk__Meal_Reimbursement___Program_Year_2021-2022.csv")) %>%
+cacfp <- read.csv(here("Child_and_Adult_Care_Food_Programs__CACFP___Child_Centers___Meal_Reimbursement___Program_Year__2022_-_2023_20240223.csv")) %>%
   mutate(CEID = as.numeric(CEID),
          SiteID = as.numeric(SiteID),
          ESC.Region = as.numeric(ESC)) %>%
@@ -254,7 +195,9 @@ cacfp <- read.csv(here("Child_and_Adult_Care_Food_Programs__CACFP____At_Risk__Me
             District = first(CountyDistrictCode),
             ESC.Region = first(ESC.Region),        
             CACFP.at.Risk.Supper.Days.Served = sum(SupperDays, na.rm=T),
-            CACFP.at.Risk.Snack.Days.Served = sum(SnackDays, na.rm=T))
+            CACFP.at.Risk.Snack.Days.Served = sum(PMSnackDays, na.rm=T))
+# Some of these district numbers look odd as well: LUTHERAN SOCIAL SERVICES OF THE SOUTH, INC TRAVIS 227-
+
 ```
 
 \
@@ -279,12 +222,12 @@ Harmony Public Schools are listed under multiple district numbers (`r paste(harm
 
 ## Aggregate data up to district level
 
-TDA data is reported monthly by Contracting Entities (CE) and participating sites. Usually October is used as the snapshot claim month for the year. This year fewer sites reported to TDA, and those that did didn't report every month, instead favoring SSO for meal reimbursement, so we used their maximum claim month for the year instead.
+TDA data is reported monthly by Contracting Entities (CE) and participating sites. October is used as the snapshot claim month for the year.
 
-
+##### AMY START HERE (line 275)
+          
 ``` {r, results='hide'}
-district <- full_join(snp, cacfp, by=c("CEID", "SiteID", "CEName", "District", "ESC.Region", "County")) %>% 
-  full_join(sso, by=c("CEID", "SiteID", "CEName", "District", "ESC.Region", "County", "TypeOfOrg"))
+district <- full_join(snp, cacfp, by=c("CEID", "SiteID", "CEName", "District", "ESC.Region", "County"))
 
 district$District = gsub("-", "", district$District)
 
@@ -293,7 +236,7 @@ district <- district %>%
   mutate(
           CEP01 = ifelse(CEP=="Y", 1, 0),
           District.Number = ifelse(District %in% harmony, 227816,
-                                   ifelse(District %in% kipp_data, 227820, District))
+                            ifelse(District %in% kipp_data, 227820, District))
           ) %>% 
   group_by(District.Number) %>% 
   summarise(
@@ -301,40 +244,35 @@ district <- district %>%
           County = first(na.omit(County)),
           ESC.Region = first(ESC.Region),
           TypeOfOrg = first(na.omit(TypeOfOrg)),
-          #Eligible.Free = sum(Eligible.Free, na.rm = T),
-          #Enrollment_TDA = sum(Enrollment_TDA, na.rm = T),
-          #Eligible.Reduced = sum(Eligible.Reduced, na.rm = T),
-          NSLP.Days.Served = max(NSLP.Days.Served, 0, na.rm = T),
-          #NSLP.Free = sum(NSLP.Free, na.rm=T),
-          #NSLP.Reduced = sum(NSLP.Reduced, na.rm=T),
-          SBP.Days.Served = max(SBP.Days.Served, 0, na.rm = T),
-          #SBP.Free = sum(SBP.Free, na.rm=T),
-          #SBP.Reduced = sum(SBP.Reduced, na.rm=T),
+          
+          # District totals for October
+          Enrollment_TDA = sum(Enrollment_TDA, na.rm = T),
+          Eligible.Free = sum(Eligible.Free, na.rm = T),         
+          Eligible.Reduced = sum(Eligible.Reduced, na.rm = T),
+  
+          # District sums for the year
+          SBP.Days.Served = sum(SBP.Days.Served, 0, na.rm = T), 
+          NSLP.Days.Served = sum(NSLP.Days.Served, 0, na.rm = T),
+          NSLP.Snack.Days.Served = sum(NSLP.Snack.Days.Served, na.rm=T),  
+          SBP.Free = sum(SBP.Free, na.rm=T),          
+          SBP.Reduced = sum(SBP.Reduced, na.rm=T),  
+          NSLP.Free = sum(NSLP.Free, na.rm=T),
+          NSLP.Reduced = sum(NSLP.Reduced, na.rm=T),
+
           CACFP.at.Risk.Supper.Days.Served = sum(CACFP.at.Risk.Supper.Days.Served, na.rm=T),
           CACFP.at.Risk.Snack.Days.Served = sum(CACFP.at.Risk.Snack.Days.Served, na.rm=T),
-          NSLP.Snack.Days.Served = sum(NSLP.Snack.Days.Served, na.rm=T),
-          CEP = sum(CEP01, na.rm=T),
+          CEP = sum(CEP01, na.rm=T)
           
-          SBP.Total = sum(SBP.Total, na.rm=T),
-          NSLP.Total = sum(NSLP.Total, na.rm=T),
-
-          #Next year we don't need SSO numbers
-          SSO.Breakfast = sum(SSO.Breakfast, na.rm = T),  
-          SSO.Lunch = sum(SSO.Lunch, na.rm = T),
-          SSO.Breakfast.Days = max(SSO.Breakfast.Days, 0, na.rm = T),
-          SSO.Lunch.Days = max(SSO.Lunch.Days, 0, na.rm = T),
-          SSO.Snack.Days = max(SSO.Snack.Days, 0, na.rm = T)    
           ) %>%
   
   left_join(., tea, by="District.Number") %>% 
   mutate(
           CEName = ifelse(District.Number==227820, "KIPP SCHOOLS", CEName),
-          #Eligible.Free and Eligible.Reduced are from the month with the greatest claims from schools
-          #next year use october numbers
-          #tda.frl.total = Eligible.Free + Eligible.Reduced,
-         # NSLP.Days.Served = ifelse(is.na(NSLP.Days.Served), 0, NSLP.Days.Served),
-         # SBP.Days.Served = ifelse(is.na(SBP.Days.Served), 0, SBP.Days.Served),
+          tda.frl.total = Eligible.Free + Eligible.Reduced,
+          NSLP.Days.Served = ifelse(is.na(NSLP.Days.Served), 0, NSLP.Days.Served),
+          SBP.Days.Served = ifelse(is.na(SBP.Days.Served), 0, SBP.Days.Served),
           
+          ##### AMY START HERE #####
           #don't need SSO next year, and instead of total, use free and reduced instead
           Breakfast.Served = SSO.Breakfast + SBP.Total,
           Breakfast.Days = SSO.Breakfast.Days + SBP.Days.Served,
@@ -353,8 +291,7 @@ district <- district %>%
           snack_anyafter =  ifelse(Snack>0, 100, 0)
                 )
 
-#In previous years, we've found participation rates by dividing the number of free and reduced meals by the students that were eligible for them.
-#We chose to do all meals for all students this year, since everyone was eligible for free meals under SSO.
+#Find participation rates by dividing the number of free and reduced meals by the students that were eligible for them
 
 ```
 
