@@ -162,11 +162,6 @@ snp.meal.reimb <- read.csv(here("School_Nutrition_Programs_-_Meal_Reimbursement_
         SBP.Reduced = sum(BreakfastServedRedc, na.rm=T),   
         NSLP.Free = sum(LunchServedFree, na.rm=T),
         NSLP.Reduced = sum(LunchServedRedc, na.rm=T),
-        
-        
-        #Last year everyone could get free meals, so I previously looked at all meals, regardless of eligibility
-        #NSLP.Total = sum(LunchTotal),
-        #SBP.Total = sum(BreakfastTotal)
         )
 
 snp <- full_join(snp.contacts, snp.meal.reimb, by = c("CEID", "SiteID", "CEName", "District", "ESC.Region"))
@@ -197,6 +192,7 @@ cacfp <- read.csv(here("Child_and_Adult_Care_Food_Programs__CACFP___Child_Center
             CACFP.at.Risk.Supper.Days.Served = sum(SupperDays, na.rm=T),
             CACFP.at.Risk.Snack.Days.Served = sum(PMSnackDays, na.rm=T))
 # Some of these district numbers look odd as well: LUTHERAN SOCIAL SERVICES OF THE SOUTH, INC TRAVIS 227-
+# Most of these sites don't have district numbers at all
 
 ```
 
@@ -224,9 +220,10 @@ Harmony Public Schools are listed under multiple district numbers (`r paste(harm
 
 TDA data is reported monthly by Contracting Entities (CE) and participating sites. October is used as the snapshot claim month for the year.
 
-##### AMY START HERE (line 275)
+##### AMY START HERE (line 280)
           
 ``` {r, results='hide'}
+
 district <- full_join(snp, cacfp, by=c("CEID", "SiteID", "CEName", "District", "ESC.Region", "County"))
 
 district$District = gsub("-", "", district$District)
@@ -253,12 +250,14 @@ district <- district %>%
           # District sums for the year
           SBP.Days.Served = sum(SBP.Days.Served, 0, na.rm = T), 
           NSLP.Days.Served = sum(NSLP.Days.Served, 0, na.rm = T),
-          NSLP.Snack.Days.Served = sum(NSLP.Snack.Days.Served, na.rm=T),  
+          # I don't think we need snack days served. Delete this line later if true.
+          # NSLP.Snack.Days.Served = sum(NSLP.Snack.Days.Served, na.rm=T),  
           SBP.Free = sum(SBP.Free, na.rm=T),          
           SBP.Reduced = sum(SBP.Reduced, na.rm=T),  
           NSLP.Free = sum(NSLP.Free, na.rm=T),
           NSLP.Reduced = sum(NSLP.Reduced, na.rm=T),
 
+          # Credit for supper and snack are given if any site provides them at any point in the year
           CACFP.at.Risk.Supper.Days.Served = sum(CACFP.at.Risk.Supper.Days.Served, na.rm=T),
           CACFP.at.Risk.Snack.Days.Served = sum(CACFP.at.Risk.Snack.Days.Served, na.rm=T),
           CEP = sum(CEP01, na.rm=T)
@@ -268,30 +267,32 @@ district <- district %>%
   left_join(., tea, by="District.Number") %>% 
   mutate(
           CEName = ifelse(District.Number==227820, "KIPP SCHOOLS", CEName),
+          
+          # October snapshot number here
           tda.frl.total = Eligible.Free + Eligible.Reduced,
-          NSLP.Days.Served = ifelse(is.na(NSLP.Days.Served), 0, NSLP.Days.Served),
-          SBP.Days.Served = ifelse(is.na(SBP.Days.Served), 0, SBP.Days.Served),
           
-          ##### AMY START HERE #####
-          #don't need SSO next year, and instead of total, use free and reduced instead
-          Breakfast.Served = SSO.Breakfast + SBP.Total,
-          Breakfast.Days = SSO.Breakfast.Days + SBP.Days.Served,
-          Lunch.Served = SSO.Lunch + NSLP.Total,
-          Lunch.Days = SSO.Lunch.Days + NSLP.Days.Served,
-          Snack = SSO.Snack.Days + NSLP.Snack.Days.Served + CACFP.at.Risk.Snack.Days.Served,
+          Lunch.Days = ifelse(is.na(NSLP.Days.Served), 0, NSLP.Days.Served),
+          Breakfast.Days = ifelse(is.na(SBP.Days.Served), 0, SBP.Days.Served),
           
-          #ADP is Average Daily Participation: The average number of students that ate on days meals were offered.         
+          # Breakfast.Served and Lunch.Served only considering free and reduced meals served
+          Breakfast.Served = SBP.Free + SBP.Reduced,
+          Lunch.Served = NSLP.Free + NSLP.Reduced,
+          Snack = district$NSLP.Snack.Days.Served + district$CACFP.at.Risk.Snack.Days.Served)
+          ,
+# AMY START HERE. Why is Snack throwing an error?
+          
+          #ADP is Average Daily Participation: The average number of free and reduced meals served on days meals were offered 
           Breakfast.ADP = ifelse(Breakfast.Days==0, 0, Breakfast.Served/Breakfast.Days),
           Lunch.ADP = ifelse(Lunch.Days==0, 0, (Lunch.Served/Lunch.Days)),
           
-          #Participation Rates are the percent of students that ate
-          Pct.Breakfast.Participation = (Breakfast.ADP/tea.all.stud)*100,
-          Pct.Lunch.Participation = (Lunch.ADP/tea.all.stud)*100,
-          cacfp_supper01 = ifelse(CACFP.at.Risk.Supper.Days.Served>0, 100, 0),
-          snack_anyafter =  ifelse(Snack>0, 100, 0)
-                )
-
-#Find participation rates by dividing the number of free and reduced meals by the students that were eligible for them
+          #Find participation rates by dividing the number of free and reduced meals by the students that were eligible for them
+          Pct.Breakfast.Participation = (Breakfast.ADP/tda.frl.total)*100,
+          Pct.Lunch.Participation = (Lunch.ADP/tda.frl.total)*100,
+          
+          # Snack and supper credit given for any days served
+          cacfp_supper01 = ifelse(CACFP.at.Risk.Supper.Days.Served > 0, 100, 0),
+          snack_anyafter =  ifelse(Snack > 0, 100, 0)
+          )
 
 ```
 
