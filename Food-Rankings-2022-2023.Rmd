@@ -219,8 +219,6 @@ Harmony Public Schools are listed under multiple district numbers (`r paste(harm
 ## Aggregate data up to district level
 
 TDA data is reported monthly by Contracting Entities (CE) and participating sites. October is used as the snapshot claim month for the year.
-
-##### AMY START HERE (line 280)
           
 ``` {r, results='hide'}
 
@@ -250,8 +248,6 @@ district <- district %>%
           # District sums for the year
           SBP.Days.Served = sum(SBP.Days.Served, 0, na.rm = T), 
           NSLP.Days.Served = sum(NSLP.Days.Served, 0, na.rm = T),
-          # I don't think we need snack days served. Delete this line later if true.
-          # NSLP.Snack.Days.Served = sum(NSLP.Snack.Days.Served, na.rm=T),  
           SBP.Free = sum(SBP.Free, na.rm=T),          
           SBP.Reduced = sum(SBP.Reduced, na.rm=T),  
           NSLP.Free = sum(NSLP.Free, na.rm=T),
@@ -259,6 +255,7 @@ district <- district %>%
 
           # Credit for supper and snack are given if any site provides them at any point in the year
           CACFP.at.Risk.Supper.Days.Served = sum(CACFP.at.Risk.Supper.Days.Served, na.rm=T),
+          NSLP.Snack.Days.Served = sum(NSLP.Snack.Days.Served, na.rm=T), 
           CACFP.at.Risk.Snack.Days.Served = sum(CACFP.at.Risk.Snack.Days.Served, na.rm=T),
           CEP = sum(CEP01, na.rm=T)
           
@@ -277,9 +274,8 @@ district <- district %>%
           # Breakfast.Served and Lunch.Served only considering free and reduced meals served
           Breakfast.Served = SBP.Free + SBP.Reduced,
           Lunch.Served = NSLP.Free + NSLP.Reduced,
-          Snack = district$NSLP.Snack.Days.Served + district$CACFP.at.Risk.Snack.Days.Served)
-          ,
-# AMY START HERE. Why is Snack throwing an error?
+          Snack = NSLP.Snack.Days.Served + CACFP.at.Risk.Snack.Days.Served,
+
           
           #ADP is Average Daily Participation: The average number of free and reduced meals served on days meals were offered 
           Breakfast.ADP = ifelse(Breakfast.Days==0, 0, Breakfast.Served/Breakfast.Days),
@@ -296,9 +292,9 @@ district <- district %>%
 
 ```
 
-Breakfast and lunch average daily participation (ADP) rates were found by dividing all meals served by the number of days meals were served.
+Breakfast and lunch average daily participation (ADP) rates were found by dividing free and reduced meals served by the number of days meals were served.
 
-Then the percent of breakfast and lunch participation was found by dividing their respective ADPs by the total number of students, as reported by the TEA data.
+Then the percent of breakfast and lunch participation was found by dividing their respective ADPs by the total number of students eligible for free and reduced meals, as reported by the TEA data.
 
 Our previous rankings found the percent of breakfast and lunch participation by dividing the free and reduced meals by the students that were eligible for them. We are looking at all meals for all students this year, since everyone was eligible for a free meal with SSO.
 
@@ -307,7 +303,8 @@ Credit for supper and snacks was given if any were offered by any site in the di
 
 ## State Rankings
 
-
+###AMY BOOKMARK
+Why is the participation percent so low?
 
 <font size="1">
 ``` {r}
@@ -522,7 +519,7 @@ I wanted to see if our food rankings score correlated with school performance. I
 Only the Academic Growth Score showed a positive correlation. But when I took out our filters (over 10,000 students and over 60% eco.dis) then the correlation was negative. I think it was just by chance that for these particular school districts there happened to be a positive correlation.
 
 
-```{r include=FALSE}
+```{r eval=FALSE, include=FALSE}
 # To find TEA scores, visit this site: https://tea.texas.gov/texas-schools/accountability/academic-accountability/performance-reporting/2022-accountability-rating-system
 
 # I used this specific file (statewide 2022 ratings): https://tea.texas.gov/sites/default/files/statewide_overall_accountability_ratings_2022.xlsx
@@ -562,7 +559,7 @@ growth.model <- lm(car.score ~ tea.growth, data = scores)
 
 The strongest relationship was found with the percent of economically disadvantaged students. But once again this relationship disappears when I take out our filters (over 10,000 students and over 60% eco.dis).
 
-```{r include=FALSE}
+```{r eval=FALSE, include=FALSE}
 ggplot(car.score, aes(x=car.score, y = eco.dis.pct, label = CEName)) +
   geom_point() +
   geom_smooth(method = lm)
@@ -575,7 +572,7 @@ eco.dis.model <- lm(car.score ~ eco.dis.pct, data = car.score)
 
 This graph highlights just how poorly Kipp Schools and Yes Prep are doing at feeding their students. They are the only schools in our rankings that have an over 90% economically disadvantaged student population and still received a score under 50 from us. Less than half the students at Kipp Schools participate in their lunch program.
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 
 ggplot(car.score, aes(x=car.score, y = eco.dis.pct, label = CEName)) +
   geom_point(aes(color=TypeOfOrg)) +
@@ -613,7 +610,7 @@ Because the last two years had an unprecedented number of free meals available t
 
 Note that 2020-2021 and 2019-2020 were left out intentionally, as we just wanted to compare to pre-pandemic levels.
 
-``` {r}
+```{undefined eval=FALSE, include=FALSE}
 
 #import data from each year
 #PY21 needs SSO added 
@@ -683,7 +680,7 @@ snp_longitudinal <- full_join(snp_PY16,snp_PY17, by = c("ProgramYear", "Breakfas
 
 Looking at the total number of breakfast and lunch meals served to all students from year to year, the number actually decreased for 2021-2022. Could be due to staffing issues, supply issues, and school shut downs.
 \
-``` {r}
+```{undefined eval=FALSE, include=FALSE}
 
 ggplot(snp_longitudinal, aes(x=ProgramYear)) +
   geom_point(aes(y=LunchTotal, color="LunchTotal")) +
@@ -696,7 +693,7 @@ ggplot(snp_longitudinal, aes(x=ProgramYear)) +
 
 Looking at the number of days breakfast and lunch were served, there was a decrease in 2020-2021 as well.
 \
-``` {r}
+```{undefined eval=FALSE, include=FALSE}
 
 ggplot(snp_longitudinal, aes(x=ProgramYear)) +
   geom_point(aes(y=BreakfastDays, color="BreakfastDays"), position = "jitter") +
@@ -711,7 +708,7 @@ Finding the average daily participation rates (Total Meals divided by Total Days
 
 Note that the data is organized by site, so this is the average number of students served on each site each day. The rate was slightly higher in 2021-2022 for lunch but not for breakfast.
 \
-``` {r}
+```{undefined eval=FALSE, include=FALSE}
 
 ggplot(snp_longitudinal, aes(x=ProgramYear)) +
   geom_point(aes(y=BreakfastADP, color="BreakfastADP")) +
